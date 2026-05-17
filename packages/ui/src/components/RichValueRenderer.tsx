@@ -6,15 +6,11 @@ import { DeserializedRichValue, type View } from "@core";
 import { TextView } from "../renderers/TextView";
 import { JsonView } from "../renderers/JsonView";
 import { TypeofView } from "../renderers/TypeofView";
-import {
-  LatexView,
-  MathView,
-  TreeView,
-  FallbackView,
-} from "../renderers/PlaceholderViews";
+import { FallbackView } from "../renderers/PlaceholderViews";
 import { ChartView } from "../renderers/ChartView";
 import { TableView } from "../renderers/TableView";
 import { SchemaView } from "../renderers/SchemaView";
+import { LatexView, MathView, TreeView } from "../renderers/MathViews";
 
 const viewRendererRegistry = new Map<string, React.ComponentType<{ data: unknown }>>();
 
