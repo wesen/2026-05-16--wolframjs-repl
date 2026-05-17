@@ -10,7 +10,7 @@ import { useAppSelector } from "../store/hooks";
 
 interface CellInputProps {
   cellId: string;
-  initialCode?: string;
+  code: string;
   inputIndex: number;
   onEvaluate: (code: string) => void;
   isActive: boolean;
@@ -51,7 +51,7 @@ const replLightTheme = EditorView.theme({
 
 export function CellInput({
   cellId,
-  initialCode,
+  code,
   inputIndex,
   onEvaluate,
   isActive,
@@ -63,6 +63,7 @@ export function CellInput({
 
   const theme = useAppSelector((s) => s.config.theme);
 
+  // Create editor on mount or when cellId changes
   useEffect(() => {
     if (!editorRef.current) return;
 
@@ -71,7 +72,7 @@ export function CellInput({
       (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
 
     const state = EditorState.create({
-      doc: initialCode ?? "",
+      doc: code,
       extensions: [
         lineNumbers(),
         highlightActiveLine(),
@@ -122,7 +123,20 @@ export function CellInput({
       view.destroy();
       viewRef.current = null;
     };
-  }, [cellId]);
+  }, [cellId]); // Only recreate when cell identity changes
+
+  // Sync external code changes into the editor (e.g. from Redux after evaluateCode)
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    const currentDoc = view.state.doc.toString();
+    if (code !== currentDoc) {
+      view.dispatch({
+        changes: { from: 0, to: currentDoc.length, insert: code },
+      });
+    }
+  }, [code]);
 
   // Focus when becoming active
   useEffect(() => {

@@ -1,15 +1,33 @@
 import type { RichValue, View } from "@core";
 
 /**
- * InteractiveWidget — a live interactive control (sliders, inputs)
- * that dynamically re-renders a computation. Inspired by Mathematica's Manipulate.
+ * ControlDef — defines a single interactive control (slider, number input, etc.)
+ */
+export interface ControlDef {
+  kind: "slider" | "number" | "select";
+  min?: number;
+  max?: number;
+  step?: number;
+  value?: number;
+  options?: string[];
+}
+
+/**
+ * InteractiveWidget — a live interactive control that dynamically
+ * re-evaluates a computation. Inspired by Mathematica's Manipulate.
+ *
+ * The render function is captured as source code so it can cross
+ * the Web Worker boundary and be re-evaluated on the main thread.
  */
 export class InteractiveWidget implements RichValue {
   readonly type = "InteractiveWidget";
 
   constructor(
     private readonly controls: Record<string, ControlDef>,
-    private readonly renderFn: (params: Record<string, number>) => unknown
+    /** The render function's source code as a string */
+    private readonly renderSrc: string,
+    /** Parameter names extracted from the render function */
+    private readonly paramNames: string[]
   ) {}
 
   summary(): string {
@@ -24,7 +42,8 @@ export class InteractiveWidget implements RichValue {
         label: "Interactive",
         data: {
           controls: this.controls,
-          renderFn: this.renderFn,
+          renderSrc: this.renderSrc,
+          paramNames: this.paramNames,
         },
       },
     ];
@@ -38,6 +57,8 @@ export class InteractiveWidget implements RichValue {
     return {
       type: "InteractiveWidget",
       controls: this.controls,
+      renderSrc: this.renderSrc,
+      paramNames: this.paramNames,
     };
   }
 
@@ -46,18 +67,12 @@ export class InteractiveWidget implements RichValue {
   }
 }
 
-export interface ControlDef {
-  kind: "slider" | "number" | "select";
-  min?: number;
-  max?: number;
-  step?: number;
-  value?: number;
-  options?: string[];
-}
-
 /**
- * manipulate({ a: slider(-5, 5) }, ({ a }) => ...)
+ * manipulate({ a: slider(-5, 5) }, ({ a }) => a * a)
+ *
  * Creates an interactive widget with live controls.
+ * The render function's source is captured via .toString() so it
+ * can be serialized across the worker boundary.
  */
 export function manipulate(
   controls: Record<string, ControlDef | { min: number; max: number; step?: number }>,
@@ -78,7 +93,18 @@ export function manipulate(
       };
     }
   }
-  return new InteractiveWidget(normalized, renderFn);
+
+  // Capture the render function's source code
+  const renderSrc = renderFn.toString();
+
+  // Extract parameter names from the destructured param: ({ a, b }) => ...
+  // or from (params) => ...
+  const paramMatch = renderSrc.match(/\(\s*\{\s*([^}]+)\s*\}\s*\)/);
+  const paramNames = paramMatch
+    ? paramMatch[1].split(",").map(s => s.trim().split("=")[0].trim()).filter(Boolean)
+    : Object.keys(normalized);
+
+  return new InteractiveWidget(normalized, renderSrc, paramNames);
 }
 
 /** Create a slider control definition */
@@ -93,8 +119,6 @@ export class StreamWatch implements RichValue {
   readonly type = "StreamWatch";
 
   constructor(
-    private readonly source: () => Promise<unknown>,
-    private readonly renderFn: (data: unknown) => unknown,
     private readonly intervalMs: number
   ) {}
 
@@ -122,13 +146,9 @@ export class StreamWatch implements RichValue {
 }
 
 /**
- * watch(source, render, interval?)
- * Creates a live data watcher.
+ * watch(intervalMs?)
+ * Creates a live data watcher placeholder.
  */
-export function watch(
-  source: () => Promise<unknown>,
-  render: (data: unknown) => unknown,
-  intervalMs = 5000
-): StreamWatch {
-  return new StreamWatch(source, render, intervalMs);
+export function watch(intervalMs = 5000): StreamWatch {
+  return new StreamWatch(intervalMs);
 }

@@ -65,6 +65,7 @@ export function Cell({ cell }: CellComponentProps) {
         <div className="flex-1">
           <CellInput
             cellId={cell.id}
+            code={cell.code}
             inputIndex={cell.inputIndex}
             onEvaluate={handleEvaluate}
             isActive={isActive}

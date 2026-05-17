@@ -72,6 +72,7 @@ const notebookSlice = createSlice({
         const cell = state.cells.find((c) => c.id === action.meta.arg.cellId);
         if (cell) {
           cell.status = "evaluating";
+          cell.code = action.meta.arg.code;
           cell.error = null;
           cell.errorStack = null;
           cell.inputIndex = state.nextInputIndex++;
