@@ -2,7 +2,6 @@ import { useState, useMemo } from "react";
 import type { SerializedRichValue } from "@core";
 import { DeserializedRichValue, type View } from "@core";
 
-/** Registry of view renderers — maps viewType to a React component. */
 import { TextView } from "../renderers/TextView";
 import { JsonView } from "../renderers/JsonView";
 import { TypeofView } from "../renderers/TypeofView";
@@ -17,7 +16,6 @@ import { StatisticsView } from "../renderers/StatisticsView";
 
 const viewRendererRegistry = new Map<string, React.ComponentType<{ data: unknown }>>();
 
-// Register built-in renderers
 viewRendererRegistry.set("text", TextView);
 viewRendererRegistry.set("json", JsonView);
 viewRendererRegistry.set("typeof", TypeofView);
@@ -32,6 +30,9 @@ viewRendererRegistry.set("fullform", JsonView);
 viewRendererRegistry.set("properties", PropertiesView);
 viewRendererRegistry.set("statistics", StatisticsView);
 
+/** Types that should use the serif math font for their summary */
+const MATH_FONT_TYPES = new Set(["SymbolicExpr", "Quantity", "Plot"]);
+
 interface RichValueRendererProps {
   value: SerializedRichValue;
   inputIndex: number;
@@ -44,13 +45,15 @@ export function RichValueRenderer({ value, inputIndex }: RichValueRendererProps)
   const activeView = views[activeViewIndex];
   const Renderer = viewRendererRegistry.get(activeView.viewType) ?? FallbackView;
 
+  const summaryFontClass = MATH_FONT_TYPES.has(value.type) ? "font-math" : "font-mono";
+
   return (
     <div className="rich-value mt-1">
       <div className="flex items-baseline gap-2">
-        <span className="text-xs font-mono text-repl-muted shrink-0 w-16 text-right">
+        <span className="text-xs font-mono text-repl-muted shrink-0 w-16 text-right select-none">
           Out[{inputIndex}]=
         </span>
-        <span className="rich-value-summary text-sm font-math text-repl-fg">
+        <span className={"rich-value-summary text-sm text-repl-fg " + summaryFontClass}>
           {richValue.summary()}
         </span>
       </div>
@@ -83,11 +86,11 @@ function ViewSwitcher({ views, activeIndex, onSelect }: ViewSwitcherProps) {
         <button
           key={view.viewType}
           onClick={() => onSelect(i)}
-          className={`px-2 py-0.5 rounded transition-colors ${
+          className={"px-2 py-0.5 rounded transition-colors " + (
             i === activeIndex
               ? "bg-repl-accent/15 text-repl-accent font-medium"
               : "text-repl-muted hover:text-repl-fg hover:bg-repl-border/50"
-          }`}
+          )}
         >
           {view.label}
         </button>

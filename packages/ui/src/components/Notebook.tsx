@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { addCell, setActiveCell, evaluateCode } from "../store/notebookSlice";
 import { addEntry } from "../store/historySlice";
@@ -10,9 +10,11 @@ export function Notebook() {
   const cells = useAppSelector((s) => s.notebook.cells);
   const activeCellId = useAppSelector((s) => s.notebook.activeCellId);
 
-  // Auto-create the first cell on mount
+  // Auto-create the first cell on mount (guard against StrictMode double-fire)
+  const initializedRef = useRef(false);
   useEffect(() => {
-    if (cells.length === 0) {
+    if (!initializedRef.current && cells.length === 0) {
+      initializedRef.current = true;
       dispatch(addCell());
     }
   }, [cells.length, dispatch]);
