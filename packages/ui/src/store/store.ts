@@ -11,5 +11,13 @@ export const store = configureStore({
   },
 });
 
+// Persist theme to localStorage on every config change
+store.subscribe(() => {
+  const state = store.getState();
+  if (state.config.theme) {
+    localStorage.setItem("repl-theme", state.config.theme);
+  }
+});
+
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;

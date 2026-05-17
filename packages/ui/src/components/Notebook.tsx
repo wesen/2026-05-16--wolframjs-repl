@@ -2,6 +2,7 @@ import { useEffect, useCallback, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { addCell, setActiveCell, evaluateCode } from "../store/notebookSlice";
 import { addEntry } from "../store/historySlice";
+import { cycleTheme } from "../store/configSlice";
 import { Cell } from "./Cell";
 import { HistoryPanel } from "./HistoryPanel";
 import type { WorkerResponse } from "@eval";
@@ -82,7 +83,14 @@ export function Notebook() {
               A JavaScript REPL with rich object representation — Shift+Enter to evaluate
             </p>
           </div>
-          <div className="flex-1 flex justify-end">
+          <div className="flex-1 flex justify-end gap-1">
+            <button
+              onClick={() => dispatch(cycleTheme())}
+              className="text-xs text-repl-muted hover:text-repl-accent transition-colors px-2 py-1 rounded-md hover:bg-repl-border/30"
+              title="Toggle theme (light/dark/system)"
+            >
+              🌓 Theme
+            </button>
             <button
               onClick={() => setShowHistory(true)}
               className="text-xs text-repl-muted hover:text-repl-accent transition-colors px-2 py-1 rounded-md hover:bg-repl-border/30"

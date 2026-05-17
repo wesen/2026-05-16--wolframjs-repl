@@ -16,8 +16,20 @@
   --font-sans: "Inter", system-ui, sans-serif;
 }
 
+/* Dark mode overrides — activated by .dark class on <html> */
+html.dark {
+  --color-repl-bg: #1A1A1A;
+  --color-repl-fg: #E5E5E5;
+  --color-repl-muted: #6B6B6B;
+  --color-repl-accent: #5BA3E6;
+  --color-repl-border: #333333;
+  --color-repl-cell-bg: #222222;
+  --color-repl-cell-hover: #2A2A2A;
+}
+
+/* System preference — only applied when no explicit .dark/.light class is set */
 @media (prefers-color-scheme: dark) {
-  :root {
+  html:not(.light):not(.dark) {
     --color-repl-bg: #1A1A1A;
     --color-repl-fg: #E5E5E5;
     --color-repl-muted: #6B6B6B;
