@@ -3,7 +3,7 @@ import { EditorView, keymap, lineNumbers, highlightActiveLine } from "@codemirro
 import { EditorState, Compartment } from "@codemirror/state";
 import { javascript } from "@codemirror/lang-javascript";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, insertNewlineAndIndent } from "@codemirror/commands";
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from "@codemirror/language";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
@@ -118,6 +118,10 @@ export function CellInput({
               onEvaluateAndNextRef.current(code);
               return true;
             },
+          },
+          {
+            key: "Enter",
+            run: insertNewlineAndIndent,
           },
           ...closeBracketsKeymap,
           ...defaultKeymap,
