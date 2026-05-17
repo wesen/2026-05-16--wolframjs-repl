@@ -30,8 +30,14 @@ viewRendererRegistry.set("fullform", JsonView);
 viewRendererRegistry.set("properties", PropertiesView);
 viewRendererRegistry.set("statistics", StatisticsView);
 
-/** Types that should use the serif math font for their summary */
+/** Types whose summary should render in the serif math font */
 const MATH_FONT_TYPES = new Set(["SymbolicExpr", "Quantity", "Plot"]);
+
+/**
+ * View types that are "inline" — short text that can sit on the same
+ * line as the Out[n]= label. These don't need a separate block below.
+ */
+const INLINE_VIEW_TYPES = new Set(["text", "math", "latex"]);
 
 interface RichValueRendererProps {
   value: SerializedRichValue;
@@ -47,18 +53,45 @@ export function RichValueRenderer({ value, inputIndex }: RichValueRendererProps)
 
   const summaryFontClass = MATH_FONT_TYPES.has(value.type) ? "font-math" : "font-mono";
 
+  // Decide whether the active view is "inline" (sits beside Out[n]=)
+  // or "block" (needs its own space below)
+  const isInlineView = INLINE_VIEW_TYPES.has(activeView.viewType);
+
   return (
     <div className="rich-value mt-1">
-      <div className="flex items-baseline gap-2">
-        <span className="text-xs font-mono text-repl-muted shrink-0 w-16 text-right select-none">
-          Out[{inputIndex}]=
-        </span>
-        <span className={"rich-value-summary text-sm text-repl-fg " + summaryFontClass}>
-          {richValue.summary()}
-        </span>
-      </div>
+      {isInlineView ? (
+        /* Inline layout: Out[n]= <rendered value> on one line */
+        <div className="flex items-baseline gap-2">
+          <span className="text-xs font-mono text-repl-muted shrink-0 w-16 text-right select-none">
+            Out[{inputIndex}]=
+          </span>
+          <span className={"text-sm text-repl-fg " + summaryFontClass}>
+            {/* For inline text views, just show the data directly */}
+            {typeof activeView.data === "string"
+              ? activeView.data
+              : richValue.summary()}
+          </span>
+        </div>
+      ) : (
+        /* Block layout: Out[n]= <summary>, then full view below */
+        <div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-xs font-mono text-repl-muted shrink-0 w-16 text-right select-none">
+              Out[{inputIndex}]=
+            </span>
+            <span className={"text-sm text-repl-fg " + summaryFontClass}>
+              {richValue.summary()}
+            </span>
+          </div>
+          <div className="ml-[calc(4rem+0.5rem)] mt-1">
+            <Renderer data={activeView.data} />
+          </div>
+        </div>
+      )}
+
+      {/* View switcher — only when multiple views exist */}
       {views.length > 1 && (
-        <div className="flex items-baseline gap-2 ml-[calc(4rem+0.5rem)]">
+        <div className="flex items-baseline gap-2 ml-[calc(4rem+0.5rem)] mt-0.5">
           <ViewSwitcher
             views={views}
             activeIndex={activeViewIndex}
@@ -66,9 +99,6 @@ export function RichValueRenderer({ value, inputIndex }: RichValueRendererProps)
           />
         </div>
       )}
-      <div className="rich-value-content ml-[calc(4rem+0.5rem)] mt-1">
-        <Renderer data={activeView.data} />
-      </div>
     </div>
   );
 }
