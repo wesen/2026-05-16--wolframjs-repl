@@ -10,10 +10,11 @@ import {
   LatexView,
   MathView,
   TreeView,
-  TableView,
   ChartView,
   FallbackView,
 } from "../renderers/PlaceholderViews";
+import { TableView } from "../renderers/TableView";
+import { SchemaView } from "../renderers/SchemaView";
 
 const viewRendererRegistry = new Map<string, React.ComponentType<{ data: unknown }>>();
 
@@ -23,6 +24,7 @@ viewRendererRegistry.set("json", JsonView);
 viewRendererRegistry.set("typeof", TypeofView);
 viewRendererRegistry.set("latex", LatexView);
 viewRendererRegistry.set("table", TableView);
+viewRendererRegistry.set("schema", SchemaView);
 viewRendererRegistry.set("chart", ChartView);
 viewRendererRegistry.set("tree", TreeView);
 viewRendererRegistry.set("math", MathView);
