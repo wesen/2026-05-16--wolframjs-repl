@@ -262,7 +262,7 @@ function serializeRegExp(regex: RegExp): any {
     { viewType: "text", label: "Source", data: source },
     { viewType: "text", label: "Flags", data: flags || "(none)" },
     { viewType: "typeof", label: "Type", data: { typeof: "object", constructor: "RegExp", source, flags } },
-    { viewType: "text", label: "Test", data: "Enter a string to test against this pattern" },
+    { viewType: "regexp-test", label: "Test", data: { source, flags } },
   ];
 
   const flagDescriptions: string[] = [];

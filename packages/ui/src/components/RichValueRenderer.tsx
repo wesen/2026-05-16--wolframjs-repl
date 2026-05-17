@@ -12,6 +12,7 @@ import { MathView, TreeView } from "../renderers/MathViews";
 import { InteractiveView } from "../renderers/InteractiveView";
 import { PropertiesView } from "../renderers/PropertiesView";
 import { StatisticsView } from "../renderers/StatisticsView";
+import { RegExpTestView } from "../renderers/RegExpTestView";
 
 // Heavy renderers — lazy-loaded to reduce initial bundle size
 // Vega-Lite (~400KB) and KaTeX (~200KB) are only loaded when needed
@@ -37,6 +38,7 @@ viewRendererRegistry.set("interactive", InteractiveView);
 viewRendererRegistry.set("fullform", JsonView);
 viewRendererRegistry.set("properties", PropertiesView);
 viewRendererRegistry.set("statistics", StatisticsView);
+viewRendererRegistry.set("regexp-test", RegExpTestView);
 
 /** Types whose summary should render in the serif math font */
 const MATH_FONT_TYPES = new Set(["SymbolicExpr", "Quantity", "Plot"]);
