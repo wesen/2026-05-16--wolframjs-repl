@@ -12,6 +12,8 @@ import { TableView } from "../renderers/TableView";
 import { SchemaView } from "../renderers/SchemaView";
 import { LatexView, MathView, TreeView } from "../renderers/MathViews";
 import { InteractiveView } from "../renderers/InteractiveView";
+import { PropertiesView } from "../renderers/PropertiesView";
+import { StatisticsView } from "../renderers/StatisticsView";
 
 const viewRendererRegistry = new Map<string, React.ComponentType<{ data: unknown }>>();
 
@@ -27,6 +29,8 @@ viewRendererRegistry.set("tree", TreeView);
 viewRendererRegistry.set("math", MathView);
 viewRendererRegistry.set("interactive", InteractiveView);
 viewRendererRegistry.set("fullform", JsonView);
+viewRendererRegistry.set("properties", PropertiesView);
+viewRendererRegistry.set("statistics", StatisticsView);
 
 interface RichValueRendererProps {
   value: SerializedRichValue;

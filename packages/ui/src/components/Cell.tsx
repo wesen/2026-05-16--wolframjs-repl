@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import type { Cell } from "../store/types";
+import type { Cell as CellType } from "../store/types";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { evaluateCode, setActiveCell } from "../store/notebookSlice";
 import { addEntry } from "../store/historySlice";
@@ -8,7 +8,7 @@ import { CellOutput } from "./CellOutput";
 import type { WorkerResponse } from "@eval";
 
 interface CellComponentProps {
-  cell: Cell;
+  cell: CellType;
 }
 
 export function Cell({ cell }: CellComponentProps) {
@@ -61,12 +61,31 @@ export function Cell({ cell }: CellComponentProps) {
       } px-4 py-3`}
       onClick={handleClick}
     >
-      <CellInput
-        cellId={cell.id}
-        inputIndex={cell.inputIndex}
-        onEvaluate={handleEvaluate}
-        isActive={isActive}
-      />
+      <div className="flex items-start gap-3">
+        <div className="flex-1">
+          <CellInput
+            cellId={cell.id}
+            inputIndex={cell.inputIndex}
+            onEvaluate={handleEvaluate}
+            isActive={isActive}
+          />
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            // Get code from the CodeMirror editor
+            const cmEditor = document.querySelector(`[data-cell-id="${cell.id}"] .cm-content`) as HTMLElement;
+            const code = cmEditor?.textContent ?? cell.code;
+            handleEvaluate(code);
+          }}
+          className="run-button mt-1 px-2.5 py-1 text-xs font-mono rounded-md 
+            bg-repl-accent/10 text-repl-accent hover:bg-repl-accent/20 
+            transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+          title="Run (Shift+Enter)"
+        >
+          ▶ Run
+        </button>
+      </div>
       <CellOutput cell={cell} />
     </div>
   );
