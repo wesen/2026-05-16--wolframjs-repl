@@ -34,15 +34,6 @@ export function TableView({ data }: { data: unknown }) {
   );
 }
 
-export function ChartView({ data }: { data: unknown }) {
-  // Placeholder — will use Vega-Lite in Phase 3
-  return (
-    <div className="chart-view text-xs text-repl-muted">
-      Chart rendering coming in Phase 3
-    </div>
-  );
-}
-
 export function FallbackView({ data }: { data: unknown }) {
   return (
     <pre className="fallback-view text-xs font-mono text-repl-fg whitespace-pre-wrap overflow-x-auto">

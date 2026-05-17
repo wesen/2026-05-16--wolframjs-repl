@@ -1,4 +1,5 @@
 import type { RichValue, View } from "@core";
+import { Plot, barChartSpec, lineChartSpec, scatterSpec, histogramSpec } from "@viz";
 
 /** Column metadata */
 export interface Column {
@@ -217,6 +218,66 @@ export class Dataset implements RichValue {
   /** Max of a column */
   max(col: string): unknown {
     return Math.max(...this._rows.map((r) => Number(r[col])).filter((v) => !isNaN(v)));
+  }
+
+  // ── Visualization shortcuts ─────────────────────────
+
+  /** Bar chart of a column */
+  barChart(valueCol: string, categoryCol?: string): Plot {
+    const catCol = categoryCol ?? this._columns.find(c => c.type === "string")?.name;
+    if (!catCol) {
+      // Count occurrences of each unique value in valueCol
+      const counts: Record<string, number> = {};
+      for (const row of this._rows) {
+        const key = String(row[valueCol] ?? "");
+        counts[key] = (counts[key] || 0) + 1;
+      }
+      const barData = Object.entries(counts).map(([key, count]) => ({ [valueCol]: key, count }));
+      return new Plot(barChartSpec(barData, valueCol, "count"), barData, `Bar chart of ${valueCol}`);
+    }
+    return new Plot(
+      barChartSpec(this._rows, catCol, valueCol),
+      this._rows,
+      `Bar chart of ${valueCol} by ${catCol}`
+    );
+  }
+
+  /** Line chart */
+  lineChart(x: string, y: string): Plot {
+    return new Plot(
+      lineChartSpec(this._rows, x, y),
+      this._rows,
+      `Line chart of ${y} vs ${x}`
+    );
+  }
+
+  /** Scatter plot */
+  scatter(x: string, y: string): Plot {
+    return new Plot(
+      scatterSpec(this._rows, x, y),
+      this._rows,
+      `Scatter plot of ${y} vs ${x}`
+    );
+  }
+
+  /** Histogram */
+  histogram(col: string): Plot {
+    return new Plot(
+      histogramSpec(this._rows, col),
+      this._rows,
+      `Histogram of ${col}`
+    );
+  }
+
+  /** Auto-visualize based on data shape */
+  visualize(): Plot | null {
+    const numericCols = this._columns.filter(c => c.type === "number").map(c => c.name);
+    const categoricalCols = this._columns.filter(c => c.type === "string").map(c => c.name);
+
+    if (numericCols.length === 1) return this.histogram(numericCols[0]);
+    if (numericCols.length >= 2) return this.scatter(numericCols[0], numericCols[1]);
+    if (categoricalCols.length >= 1) return this.barChart(categoricalCols[0]);
+    return null;
   }
 
   // ── Export ──────────────────────────────────────────

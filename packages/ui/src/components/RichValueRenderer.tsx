@@ -10,9 +10,9 @@ import {
   LatexView,
   MathView,
   TreeView,
-  ChartView,
   FallbackView,
 } from "../renderers/PlaceholderViews";
+import { ChartView } from "../renderers/ChartView";
 import { TableView } from "../renderers/TableView";
 import { SchemaView } from "../renderers/SchemaView";
 
