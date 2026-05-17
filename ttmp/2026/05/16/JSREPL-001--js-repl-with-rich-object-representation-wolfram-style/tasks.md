@@ -36,3 +36,6 @@
 - [x] T4: History panel — sidebar showing all Out[n] values with type badges, search/filter by type, click to scroll to cell
 - [x] T5: Dark mode toggle — implement theme switching using Tailwind dark: tokens, add toggle button in the header
 - [x] T6: Code-split lazy loading — lazy-load Vega-Lite, KaTeX, and math.js per cell output to reduce initial bundle from 1.7 MB
+- [x] T7: Restore real UI evaluation shortcuts — Enter inserts newline, Shift+Enter evaluates, Ctrl/Cmd+Enter evaluates and creates/focuses the next cell, Run button evaluates current editor content
+- [x] T8: Make multiline input explicit — bind Enter directly to CodeMirror insertNewlineAndIndent instead of relying on defaultKeymap ordering
+- [x] T9: Evaluate multiline expressions as whole-cell expressions before falling back to statements plus final expression

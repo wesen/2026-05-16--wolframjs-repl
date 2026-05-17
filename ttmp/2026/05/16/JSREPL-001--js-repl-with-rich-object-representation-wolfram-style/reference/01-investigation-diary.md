@@ -229,3 +229,58 @@ Reduced initial bundle by 63% through lazy loading heavy dependencies.
 **What didn't work:**
 - math.js (used in the worker) cannot be lazy-loaded since the worker is a separate entry point
 - The worker chunk remains 685KB — future optimization could split math.js out of the worker
+
+### T7: Restore real UI evaluation shortcuts ✅
+
+The previous Playwright checks dispatched `evaluateCode()` through the Redux store directly, which bypassed the real CodeMirror keymap and Run button path. Manual testing revealed that Shift+Enter/Ctrl+Enter inserted newlines and the Run button path could miss the current editor content.
+
+**What was done:**
+- Added `EditorView.updateListener` to `CellInput` so CodeMirror changes continuously sync into Redux via `updateCellCode()`
+- Moved custom REPL key bindings before CodeMirror's default keymap so they win before the default Enter binding
+- Changed keyboard contract:
+  - `Enter`: insert newline for multiline editing
+  - `Shift+Enter`: evaluate current cell and stay in place
+  - `Ctrl/Cmd+Enter`: evaluate current cell and create/focus the next cell
+- Added `onEvaluateAndNext` callback from `CellInput` to `Cell`
+- Updated `Cell` to dispatch `focusNextCell()` after Ctrl/Cmd+Enter evaluation
+- Updated global Ctrl/Cmd+Enter handler to ignore events originating inside CodeMirror, avoiding duplicate/conflicting evaluation
+- Added `data-cell-id` on the editor container so the Run button can reliably read the current CodeMirror DOM content
+- Fixed duplicate React keys in `ViewSwitcher` by using `viewType-label-index` keys instead of `viewType` alone
+
+**Validation:**
+- Typed `const x = 40`, pressed Enter, typed `x + 2`: the editor contained two lines and did not evaluate
+- Pressed Shift+Enter: the cell evaluated to `42`
+- Typed `21 * 2`, pressed Ctrl+Enter: the cell evaluated and a new cell was created/focused
+- Typed `7 * 6`, clicked Run: the cell evaluated to `42`
+- TypeScript and production build pass
+
+### T8: Make multiline input explicit ✅
+
+Manual feedback indicated multiline input was still unreliable. Playwright showed multiline insertion worked in the current session, but relying on CodeMirror's default keymap made the behavior too implicit.
+
+**What was done:**
+- Imported `insertNewlineAndIndent` from `@codemirror/commands`
+- Added an explicit `Enter` binding in `CellInput` after Shift/Ctrl evaluation bindings and before default keymaps
+- `Enter` now directly calls CodeMirror's newline/indent command
+- `Shift+Enter` and `Ctrl/Cmd+Enter` still intercept before Enter and evaluate as intended
+
+**Validation:**
+- Typed `const x = 40`, pressed Enter, typed `x + 2`
+- Verified editor DOM text and Redux cell code both contain `const x = 40\nx + 2`
+- Pressed Shift+Enter and verified output evaluates to `42`
+- TypeScript and production build pass
+
+
+### T9: Evaluate multiline expressions as whole-cell expressions ✅
+
+The dataset pipeline example exposed a separate issue from text editing: multiline input was present in the editor, but the evaluator split the cell by line and returned only the last line. That breaks multiline expression chains such as `dataset([ ... ]).filterEq(...).sort(...)` because the previous lines are not standalone statements.
+
+**What was done:**
+- Changed `evaluateCode()` in the worker to first try evaluating the entire trimmed cell as one expression via `return (${trimmed});`
+- Kept the existing fallback for statement blocks where the last line is the returned expression, e.g. `const x = 40\nx + 2`
+- If both strategies fail, preserve the original whole-expression error because it is usually more relevant for multiline chains
+
+**Validation:**
+- Tested the exact multiline dataset example with `filterEq("city", "Berlin").sort("age", "asc")`
+- Verified it renders `Dataset[2 rows × 3 columns]` with Dave and Alice and no error
+- TypeScript and production build pass
