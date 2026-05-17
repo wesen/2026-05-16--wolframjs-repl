@@ -1,16 +1,63 @@
 import type { RichValue, View } from "@core";
 
 /**
- * Rule — a rewrite rule mapping a pattern to a replacement.
+ * RuleObj — a rewrite rule mapping a pattern to a replacement.
+ *
+ * Implements RichValue so it renders with Pattern, Replacement, Source views
+ * instead of falling through to the generic Object serializer.
  *
  * Patterns may contain pattern variables (written with trailing underscore:
  * a_, x_, n_). When the pattern matches an expression, the pattern variables
  * are bound to the subexpressions they matched.
  */
-export interface Rule {
-  readonly patternStr: string;
-  readonly replacementStr: string;
-  readonly source?: string;
+export class RuleObj implements RichValue {
+  readonly type = "Rule";
+
+  constructor(
+    readonly patternStr: string,
+    readonly replacementStr: string,
+    readonly source?: string,
+  ) {}
+
+  /** Extract pattern variable names (identifiers ending with _) */
+  patternVars(): string[] {
+    const regex = /(\w+)_/g;
+    const vars: string[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = regex.exec(this.patternStr)) !== null) {
+      vars.push(m[1]);
+    }
+    return vars;
+  }
+
+  // ── RichValue protocol ──────────────────────────────
+
+  summary(): string {
+    return `${this.patternStr} -> ${this.replacementStr}`;
+  }
+
+  views(): View[] {
+    return [
+      { viewType: "text", label: "Pattern", data: this.patternStr },
+      { viewType: "text", label: "Replacement", data: this.replacementStr },
+      { viewType: "text", label: "Source", data: this.source || `${this.patternStr} -> ${this.replacementStr}` },
+      { viewType: "text", label: "Variables", data: this.patternVars().length > 0 ? `Pattern variables: ${this.patternVars().join(", ")}` : "No pattern variables" },
+    ];
+  }
+
+  explain(): string {
+    const vars = this.patternVars();
+    const varDesc = vars.length > 0 ? ` Pattern variables: ${vars.join(", ")}.` : "";
+    return `A rewrite rule that matches '${this.patternStr}' and replaces it with '${this.replacementStr}'.${varDesc}`;
+  }
+
+  toJSON(): unknown {
+    return { pattern: this.patternStr, replacement: this.replacementStr, source: this.source };
+  }
+
+  inputForm(): string {
+    return this.source || `${this.patternStr} -> ${this.replacementStr}`;
+  }
 }
 
 /**
@@ -27,18 +74,18 @@ export type Bindings = Map<string, unknown>;
 export function rule(
   strings: TemplateStringsArray,
   ...values: unknown[]
-): Rule {
+): RuleObj {
   const raw = strings.raw.join("");
   const parts = raw.split("->");
   if (parts.length !== 2) {
     throw new Error(`Invalid rule syntax: expected "pattern -> replacement", got "${raw}"`);
   }
 
-  return {
-    patternStr: parts[0].trim(),
-    replacementStr: parts[1].trim(),
-    source: raw,
-  };
+  return new RuleObj(
+    parts[0].trim(),
+    parts[1].trim(),
+    raw,
+  );
 }
 
 /**
@@ -82,7 +129,7 @@ export class RewriteResult implements RichValue {
  * Apply rewrite rules to a string expression until no more changes occur.
  * This is a string-level rewrite engine for simplicity.
  */
-export function rewrite(input: string, rules: Rule[]): string {
+export function rewrite(input: string, rules: RuleObj[]): string {
   let current = input;
   let changed = true;
   let iterations = 0;
@@ -93,14 +140,7 @@ export function rewrite(input: string, rules: Rule[]): string {
     changed = false;
     for (const r of rules) {
       // Extract pattern variables from the pattern
-      // Pattern variables: identifiers ending with _
-      const patternVarRegex = /(\w+)_/g;
-      const patternVars: string[] = [];
-      let match: RegExpExecArray | null;
-      const patternProcessed = r.patternStr;
-      while ((match = patternVarRegex.exec(patternProcessed)) !== null) {
-        patternVars.push(match[1]);
-      }
+      const patternVars = r.patternVars();
 
       // For string-level matching, we create a regex from the pattern
       // replacing pattern variables with capture groups
@@ -109,13 +149,26 @@ export function rewrite(input: string, rules: Rule[]): string {
         if ("+-*/^".includes(ch)) return `\\${ch}`;
         return ch;
       });
-      // Fix: we already escaped () etc, but we need capture groups
-      // Simple approach: try direct string match first
 
-      // Direct replacement for simple patterns
-      if (current.includes(r.patternStr.replace(/(\w+)_/g, ""))) {
-        // Can't do simple string replacement with pattern vars
-        // Skip for now — proper pattern matching requires tree-level work
+      // Try regex match and replace
+      try {
+        const regex = new RegExp(regexStr);
+        const match = regex.exec(current);
+        if (match) {
+          let replacement = r.replacementStr;
+          // Replace pattern variable references in the replacement
+          for (let i = 0; i < patternVars.length && i + 1 < match.length; i++) {
+            replacement = replacement.replace(
+              new RegExp(`\\b${patternVars[i]}_?\\b`, "g"),
+              match[i + 1]
+            );
+          }
+          current = current.replace(regex, replacement);
+          changed = true;
+          totalApplied++;
+        }
+      } catch {
+        // Invalid regex — skip this rule
       }
     }
     iterations++;

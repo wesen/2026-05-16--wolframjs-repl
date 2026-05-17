@@ -1,1 +1,1 @@
-export { type Rule, type Bindings, RewriteResult, rule, rewrite } from "./rule";
+export { type RuleObj as Rule, type Bindings, RuleObj, RewriteResult, rule, rewrite } from "./rule";
