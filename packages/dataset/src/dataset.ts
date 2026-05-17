@@ -29,6 +29,26 @@ export interface DatasetSummary {
   columnSummaries: ColumnSchema[];
 }
 
+/** A single recorded operation in the Dataset pipeline */
+export interface OperationLogEntry {
+  readonly op: string;
+  readonly args: Record<string, unknown>;
+  readonly timestamp: number;
+}
+
+/** SQL generation context */
+interface SQLClause {
+  select: string[];
+  from: string;
+  where: string[];
+  groupBy: string[];
+  orderBy: string[];
+  orderDir: string[];
+  limit?: number;
+  offset?: number;
+  extraColumns: string[];  // from withColumn
+}
+
 /**
  * Dataset — a DataFrame-like class implementing RichValue.
  * Supports chainable operations: filter, groupBy, sort, select, transform.
@@ -40,7 +60,9 @@ export class Dataset implements RichValue {
   constructor(
     private readonly _columns: Column[],
     private readonly _rows: Row[],
-    private readonly _name?: string
+    private readonly _name?: string,
+    private readonly _opLog: OperationLogEntry[] = [],
+  private readonly _tableName: string = "data",
   ) {}
 
   get length(): number {
@@ -92,11 +114,42 @@ export class Dataset implements RichValue {
         data: this._rows.slice(0, 50),
       },
     ];
+
+    // Add Pipeline view if there are recorded operations
+    if (this._opLog.length > 0) {
+      views.push({
+        viewType: "text",
+        label: "Pipeline",
+        data: this.explain(),
+      });
+      views.push({
+        viewType: "text",
+        label: "SQL",
+        data: this.toSQL(),
+      });
+    }
+
     return views;
   }
 
   explain(): string {
-    return `A dataset with ${this._rows.length} rows and ${this._columns.length} columns: ${this.columnNames.join(", ")}.`;
+    if (this._opLog.length === 0) {
+      return `A dataset with ${this._rows.length} rows and ${this._columns.length} columns: ${this.columnNames.join(", ")}.`;
+    }
+    const steps = this._opLog.map((entry, i) => {
+      const a = entry.args;
+      switch (entry.op) {
+        case "filter": return `${i + 1}. Filter rows${a.col ? ` where ${a.col} ${a.op || "=="} ${String(a.val)}` : " by predicate"}.`;
+        case "sort": return `${i + 1}. Sort by ${a.col} ${a.dir === "desc" ? "descending" : "ascending"}.`;
+        case "select": return `${i + 1}. Select columns: ${(a.cols as string[] || []).join(", ")}.`;
+        case "groupBy": return `${i + 1}. Group by ${a.col}.`;
+        case "head": return `${i + 1}. Take first ${a.n} rows.`;
+        case "tail": return `${i + 1}. Take last ${a.n} rows.`;
+        case "withColumn": return `${i + 1}. Add/transform column "${a.colName}".`;
+        default: return `${i + 1}. Apply ${entry.op}.`;
+      }
+    });
+    return `A dataset with ${this._rows.length} rows and ${this._columns.length} columns. Pipeline:\n${steps.join("\n")}`;
   }
 
   toJSON(): unknown {
@@ -109,12 +162,47 @@ export class Dataset implements RichValue {
 
   // ── Chainable operations ────────────────────────────
 
-  /** Filter rows by predicate */
-  filter(predicate: (row: Row) => boolean): Dataset {
+  /** Filter rows by predicate — logs a descriptive entry if possible */
+  filter(predicate: (row: Row) => boolean, description?: string): Dataset {
     return new Dataset(
       this._columns,
       this._rows.filter(predicate),
-      this._name
+      this._name,
+      [...this._opLog, { op: "filter", args: { description: description || "custom predicate" }, timestamp: Date.now() }],
+      this._tableName,
+    );
+  }
+
+  /** Filter rows where column equals a value — convenience method with auto-logging */
+  filterEq(col: string, val: unknown): Dataset {
+    return new Dataset(
+      this._columns,
+      this._rows.filter(r => r[col] === val),
+      this._name,
+      [...this._opLog, { op: "filter", args: { col, op: "==", val }, timestamp: Date.now() }],
+      this._tableName,
+    );
+  }
+
+  /** Filter rows where column is greater than a value */
+  filterGt(col: string, val: unknown): Dataset {
+    return new Dataset(
+      this._columns,
+      this._rows.filter(r => (r[col] as any) > (val as any)),
+      this._name,
+      [...this._opLog, { op: "filter", args: { col, op: ">", val }, timestamp: Date.now() }],
+      this._tableName,
+    );
+  }
+
+  /** Filter rows where column is less than a value */
+  filterLt(col: string, val: unknown): Dataset {
+    return new Dataset(
+      this._columns,
+      this._rows.filter(r => (r[col] as any) < (val as any)),
+      this._name,
+      [...this._opLog, { op: "filter", args: { col, op: "<", val }, timestamp: Date.now() }],
+      this._tableName,
     );
   }
 
@@ -128,7 +216,11 @@ export class Dataset implements RichValue {
       const cmp = av > bv ? 1 : av < bv ? -1 : 0;
       return dir === "asc" ? cmp : -cmp;
     });
-    return new Dataset(this._columns, sorted, this._name);
+    return new Dataset(
+      this._columns, sorted, this._name,
+      [...this._opLog, { op: "sort", args: { col, dir }, timestamp: Date.now() }],
+      this._tableName,
+    );
   }
 
   /** Select a subset of columns */
@@ -141,7 +233,11 @@ export class Dataset implements RichValue {
       }
       return newRow;
     });
-    return new Dataset(newCols, newRows, this._name);
+    return new Dataset(
+      newCols, newRows, this._name,
+      [...this._opLog, { op: "select", args: { cols }, timestamp: Date.now() }],
+      this._tableName,
+    );
   }
 
   /** Add or transform a column */
@@ -154,7 +250,11 @@ export class Dataset implements RichValue {
       ...row,
       [colName]: fn(row),
     }));
-    return new Dataset(newCols, newRows, this._name);
+    return new Dataset(
+      newCols, newRows, this._name,
+      [...this._opLog, { op: "withColumn", args: { colName }, timestamp: Date.now() }],
+      this._tableName,
+    );
   }
 
   /** Group by a column and return a GroupedDataset */
@@ -165,17 +265,29 @@ export class Dataset implements RichValue {
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(row);
     }
-    return new GroupedDataset(col, groups, this._columns);
+    return new GroupedDataset(
+      col, groups, this._columns,
+      [...this._opLog, { op: "groupBy", args: { col }, timestamp: Date.now() }],
+      this._tableName,
+    );
   }
 
   /** Take first N rows */
   head(n: number): Dataset {
-    return new Dataset(this._columns, this._rows.slice(0, n), this._name);
+    return new Dataset(
+      this._columns, this._rows.slice(0, n), this._name,
+      [...this._opLog, { op: "head", args: { n }, timestamp: Date.now() }],
+      this._tableName,
+    );
   }
 
   /** Take last N rows */
   tail(n: number): Dataset {
-    return new Dataset(this._columns, this._rows.slice(-n), this._name);
+    return new Dataset(
+      this._columns, this._rows.slice(-n), this._name,
+      [...this._opLog, { op: "tail", args: { n }, timestamp: Date.now() }],
+      this._tableName,
+    );
   }
 
   /** Get unique values for a column */
@@ -282,9 +394,108 @@ export class Dataset implements RichValue {
 
   // ── Export ──────────────────────────────────────────
 
-  /** Convert current operations to a SQL query (best-effort) */
-  toSQL(tableName = "data"): string {
-    return `SELECT * FROM ${tableName}; -- ${this._rows.length} rows`;
+  /** Convert the recorded operation pipeline to a SQL query */
+  toSQL(tableName?: string): string {
+    const tbl = tableName || this._tableName;
+    const clause: SQLClause = {
+      select: ["*"],
+      from: tbl,
+      where: [],
+      groupBy: [],
+      orderBy: [],
+      orderDir: [],
+      limit: undefined,
+      offset: undefined,
+      extraColumns: [],
+    };
+
+    for (const entry of this._opLog) {
+      const a = entry.args;
+      switch (entry.op) {
+        case "filter": {
+          if (a.col && a.op && a.val !== undefined) {
+            const sqlVal = typeof a.val === "string" ? `'${a.val}'` : String(a.val);
+            clause.where.push(`${a.col} ${a.op} ${sqlVal}`);
+          } else if (a.description) {
+            clause.where.push(`-- ${a.description}`);
+          }
+          break;
+        }
+        case "sort": {
+          clause.orderBy.push(String(a.col));
+          clause.orderDir.push(String(a.dir || "asc").toUpperCase());
+          break;
+        }
+        case "select": {
+          clause.select = (a.cols as string[]) || ["*"];
+          break;
+        }
+        case "groupBy": {
+          clause.groupBy.push(String(a.col));
+          break;
+        }
+        case "head": {
+          clause.limit = a.n as number;
+          break;
+        }
+        case "tail": {
+          // SQL doesn't have tail natively — use ORDER BY + LIMIT then re-sort
+          clause.orderBy.unshift("_row_id");
+          clause.orderDir.unshift("DESC");
+          clause.limit = a.n as number;
+          break;
+        }
+        case "withColumn": {
+          clause.extraColumns.push(String(a.colName));
+          break;
+        }
+      }
+    }
+
+    // Build SQL string
+    let sql = "SELECT ";
+
+    // Combine select columns with extra columns
+    const allSelect = [...clause.select, ...clause.extraColumns.map(c => `-- ${c} (computed)` )];
+    sql += allSelect.join(", ");
+
+    sql += `\nFROM ${clause.from}`;
+
+    if (clause.where.length > 0) {
+      sql += "\nWHERE ";
+      const realClauses = clause.where.filter(w => !w.startsWith("--"));
+      const comments = clause.where.filter(w => w.startsWith("--"));
+      if (realClauses.length > 0) {
+        sql += realClauses.join(" AND ");
+      }
+      if (comments.length > 0) {
+        if (realClauses.length > 0) sql += " ";
+        sql += comments.join(" ");
+      }
+    }
+
+    if (clause.groupBy.length > 0) {
+      sql += `\nGROUP BY ${clause.groupBy.join(", ")}`;
+    }
+
+    if (clause.orderBy.length > 0) {
+      const orderParts = clause.orderBy.map((col, i) => {
+        const dir = clause.orderDir[i] || "ASC";
+        return `${col} ${dir}`;
+      });
+      sql += `\nORDER BY ${orderParts.join(", ")}`;
+    }
+
+    if (clause.limit !== undefined) {
+      sql += `\nLIMIT ${clause.limit}`;
+    }
+
+    sql += ";";
+
+    // Add comment with row count
+    sql += ` -- ${this._rows.length} rows`;
+
+    return sql;
   }
 
   /** Convert to CSV string */
@@ -346,7 +557,9 @@ export class GroupedDataset {
   constructor(
     private readonly groupColumn: string,
     private readonly groups: Map<string, Row[]>,
-    private readonly originalColumns: Column[]
+    private readonly originalColumns: Column[],
+    private readonly _opLog: OperationLogEntry[] = [],
+    private readonly _tableName: string = "data",
   ) {}
 
   /** Count per group → Dataset */
@@ -383,12 +596,15 @@ export class GroupedDataset {
     }
     const columns: Column[] = [
       { name: this.groupColumn, type: "string" },
-      {
-        name: valueCol,
-        type: valueCol === "count" ? "number" : "number",
-      },
+      { name: valueCol, type: "number" },
     ];
-    return new Dataset(columns, resultRows);
+    // Add the aggregation to the operation log
+    const aggLog: OperationLogEntry = {
+      op: "aggregate",
+      args: { groupBy: this.groupColumn, aggregation: valueCol },
+      timestamp: Date.now(),
+    };
+    return new Dataset(columns, resultRows, undefined, [...this._opLog, aggLog], this._tableName);
   }
 
   /** Get group keys */
@@ -406,16 +622,16 @@ export class GroupedDataset {
 // ── Factory functions ────────────────────────────────
 
 /** Create a Dataset from an array of objects */
-export function dataset(data: Row[], name?: string): Dataset {
+export function dataset(data: Row[], name?: string, tableName?: string): Dataset {
   if (data.length === 0) {
-    return new Dataset([], [], name);
+    return new Dataset([], [], name, [], tableName || "data");
   }
   const colNames = Object.keys(data[0]);
   const columns: Column[] = colNames.map((name) => ({
     name,
     type: inferType(data.map((r) => r[name])),
   }));
-  return new Dataset(columns, data, name);
+  return new Dataset(columns, data, name, [], tableName || "data");
 }
 
 /** Create a Dataset from CSV text */
