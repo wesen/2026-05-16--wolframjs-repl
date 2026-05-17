@@ -5,4 +5,5 @@ export { FallbackView } from "./PlaceholderViews";
 export { TableView } from "./TableView";
 export { SchemaView } from "./SchemaView";
 export { ChartView } from "./ChartView";
-export { LatexView, MathView, TreeView } from "./MathViews";
+export { LatexView } from "./LatexView";
+export { MathView, TreeView } from "./MathViews";

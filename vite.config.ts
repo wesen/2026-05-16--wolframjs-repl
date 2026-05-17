@@ -10,6 +10,18 @@ export default defineConfig({
   },
   build: {
     target: "esnext",
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (id.includes("node_modules/vega") || id.includes("node_modules/vega-embed") || id.includes("node_modules/vega-lite")) {
+            return "vega";
+          }
+          if (id.includes("node_modules/katex")) {
+            return "katex";
+          }
+        },
+      },
+    },
   },
   resolve: {
     alias: {

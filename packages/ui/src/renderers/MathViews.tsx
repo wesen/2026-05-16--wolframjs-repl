@@ -1,31 +1,3 @@
-import katex from "katex";
-
-export function LatexView({ data }: { data: unknown }) {
-  const latex = String(data ?? "");
-
-  try {
-    const html = katex.renderToString(latex, {
-      throwOnError: false,
-      displayMode: true,
-      trust: true,
-    });
-
-    return (
-      <div
-        className="latex-view text-base font-math overflow-x-auto"
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
-    );
-  } catch {
-    // Fallback: render as plain text
-    return (
-      <div className="latex-view text-sm font-mono text-repl-fg whitespace-pre-wrap">
-        {latex}
-      </div>
-    );
-  }
-}
-
 export function MathView({ data }: { data: unknown }) {
   // Math view is the pretty-printed representation
   // If the data looks like LaTeX, render with KaTeX; otherwise plain text

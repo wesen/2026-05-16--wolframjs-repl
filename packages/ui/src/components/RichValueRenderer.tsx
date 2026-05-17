@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, lazy, Suspense } from "react";
 import type { SerializedRichValue } from "@core";
 import { DeserializedRichValue, type View } from "@core";
 
@@ -6,23 +6,31 @@ import { TextView } from "../renderers/TextView";
 import { JsonView } from "../renderers/JsonView";
 import { TypeofView } from "../renderers/TypeofView";
 import { FallbackView } from "../renderers/PlaceholderViews";
-import { ChartView } from "../renderers/ChartView";
 import { TableView } from "../renderers/TableView";
 import { SchemaView } from "../renderers/SchemaView";
-import { LatexView, MathView, TreeView } from "../renderers/MathViews";
+import { MathView, TreeView } from "../renderers/MathViews";
 import { InteractiveView } from "../renderers/InteractiveView";
 import { PropertiesView } from "../renderers/PropertiesView";
 import { StatisticsView } from "../renderers/StatisticsView";
+
+// Heavy renderers — lazy-loaded to reduce initial bundle size
+// Vega-Lite (~400KB) and KaTeX (~200KB) are only loaded when needed
+const ChartView = lazy(() =>
+  import("../renderers/ChartView").then((m) => ({ default: m.ChartView }))
+);
+const LatexView = lazy(() =>
+  import("../renderers/LatexView").then((m) => ({ default: m.LatexView }))
+);
 
 const viewRendererRegistry = new Map<string, React.ComponentType<{ data: unknown }>>();
 
 viewRendererRegistry.set("text", TextView);
 viewRendererRegistry.set("json", JsonView);
 viewRendererRegistry.set("typeof", TypeofView);
-viewRendererRegistry.set("latex", LatexView);
+viewRendererRegistry.set("latex", LatexView);  // lazy
 viewRendererRegistry.set("table", TableView);
 viewRendererRegistry.set("schema", SchemaView);
-viewRendererRegistry.set("chart", ChartView);
+viewRendererRegistry.set("chart", ChartView);   // lazy
 viewRendererRegistry.set("tree", TreeView);
 viewRendererRegistry.set("math", MathView);
 viewRendererRegistry.set("interactive", InteractiveView);
@@ -34,7 +42,10 @@ viewRendererRegistry.set("statistics", StatisticsView);
 const MATH_FONT_TYPES = new Set(["SymbolicExpr", "Quantity", "Plot"]);
 
 /** View types that are "inline" — sit on the same line as Out[n]= */
-const INLINE_VIEW_TYPES = new Set(["text", "math", "latex"]);
+const INLINE_VIEW_TYPES = new Set(["text", "math"]);
+
+/** View types that use lazy-loaded heavy dependencies */
+const LAZY_VIEW_TYPES = new Set(["chart", "latex"]);
 
 interface RichValueRendererProps {
   value: SerializedRichValue;
@@ -50,6 +61,15 @@ export function RichValueRenderer({ value, inputIndex }: RichValueRendererProps)
 
   const summaryFontClass = MATH_FONT_TYPES.has(value.type) ? "font-math" : "font-mono";
   const isInlineView = INLINE_VIEW_TYPES.has(activeView.viewType);
+  const isLazyView = LAZY_VIEW_TYPES.has(activeView.viewType);
+
+  const content = isLazyView ? (
+    <Suspense fallback={<div className="text-xs text-repl-muted animate-pulse">Loading...</div>}>
+      <Renderer data={activeView.data} />
+    </Suspense>
+  ) : (
+    <Renderer data={activeView.data} />
+  );
 
   return (
     <div className="rich-value mt-1">
@@ -92,7 +112,7 @@ export function RichValueRenderer({ value, inputIndex }: RichValueRendererProps)
               {richValue.summary()}
             </span>
             <div className="mt-1">
-              <Renderer data={activeView.data} />
+              {content}
             </div>
           </div>
         )}
