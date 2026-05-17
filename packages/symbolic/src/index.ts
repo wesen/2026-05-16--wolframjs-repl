@@ -8,4 +8,8 @@ export {
   evaluate,
   expand,
   solve,
+  matchTree,
+  applyBindings,
+  rewriteExpr,
 } from "./expr";
+export type { MatchResult } from "./expr";

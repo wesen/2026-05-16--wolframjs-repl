@@ -286,7 +286,227 @@ function preprocessMath(input: string): string {
   return result;
 }
 
-// ── Symbolic operations ───────────────────────────────
+// ── Tree-level pattern matching ──────────────────────
+
+/**
+ * Result of matching a pattern against a node.
+ * bindings maps pattern variable names to matched sub-trees.
+ */
+export interface MatchResult {
+  matched: boolean;
+  bindings: Map<string, MathNode>;
+}
+
+/**
+ * Match a pattern tree against an expression tree.
+ *
+ * Pattern variables are SymbolNodes whose name ends with '_'.
+ * A pattern variable matches any single sub-tree.
+ * Non-variable nodes must match exactly (operator, function name, arity).
+ */
+export function matchTree(pattern: MathNode, expr: MathNode): MatchResult {
+  const bindings = new Map<string, MathNode>();
+  const ok = matchNode(pattern, expr, bindings);
+  return { matched: ok, bindings };
+}
+
+function matchNode(
+  pattern: MathNode,
+  expr: MathNode,
+  bindings: Map<string, MathNode>
+): boolean {
+  // Pattern variable: symbol ending with _
+  if (pattern instanceof SymbolNode) {
+    if (pattern.name.endsWith("_")) {
+      const varName = pattern.name.slice(0, -1);
+      if (bindings.has(varName)) {
+        // Already bound — must match the same tree
+        return treeEqual(bindings.get(varName)!, expr);
+      }
+      bindings.set(varName, expr);
+      return true;
+    }
+    // Regular symbol — must match exactly
+    return expr instanceof SymbolNode && expr.name === pattern.name;
+  }
+
+  // Constant
+  if (pattern instanceof ConstantNode) {
+    if (!(expr instanceof ConstantNode)) return false;
+    return pattern.value === expr.value;
+  }
+
+  // Parenthesis — unwrap
+  if (pattern instanceof ParenthesisNode) {
+    return matchNode(pattern.content, expr, bindings);
+  }
+  if (expr instanceof ParenthesisNode) {
+    return matchNode(pattern, expr.content, bindings);
+  }
+
+  // Operator node
+  if (pattern instanceof OperatorNode) {
+    if (!(expr instanceof OperatorNode)) return false;
+    if (pattern.op !== expr.op) return false;
+    if (pattern.args.length !== expr.args.length) return false;
+    for (let i = 0; i < pattern.args.length; i++) {
+      if (!matchNode(pattern.args[i], expr.args[i], bindings)) return false;
+    }
+    return true;
+  }
+
+  // Function node
+  if (pattern instanceof FunctionNode) {
+    if (!(expr instanceof FunctionNode)) return false;
+    if (pattern.fn.name !== expr.fn.name) return false;
+    if (pattern.args.length !== expr.args.length) return false;
+    for (let i = 0; i < pattern.args.length; i++) {
+      if (!matchNode(pattern.args[i], expr.args[i], bindings)) return false;
+    }
+    return true;
+  }
+
+  // Fallback: structural equality
+  return pattern.toString() === expr.toString();
+}
+
+/** Check structural equality of two nodes (shallow, no simplification). */
+function treeEqual(a: MathNode, b: MathNode): boolean {
+  return a.toString() === b.toString();
+}
+
+/**
+ * Apply bindings to a replacement template tree.
+ * Pattern variables (name_) in the template are replaced by their bound values.
+ */
+export function applyBindings(template: MathNode, bindings: Map<string, MathNode>): MathNode {
+  return transformNode(template, (node) => {
+    if (node instanceof SymbolNode && node.name.endsWith("_")) {
+      const varName = node.name.slice(0, -1);
+      if (bindings.has(varName)) {
+        return bindings.get(varName)!;
+      }
+    }
+    return node;
+  });
+}
+
+/**
+ * Transform a node tree: apply a function to every node bottom-up.
+ * If the function returns a different node, replace it.
+ */
+function transformNode(
+  node: MathNode,
+  fn: (node: MathNode) => MathNode
+): MathNode {
+  // First, recursively transform children
+  let transformed: MathNode = node;
+
+  if (node instanceof OperatorNode) {
+    const newArgs = node.args.map((a) => transformNode(a, fn));
+    if (newArgs.some((a, i) => a !== node.args[i])) {
+      transformed = new OperatorNode(node.op, node.fn, newArgs as [MathNode, MathNode]);
+    }
+  } else if (node instanceof FunctionNode) {
+    const newArgs = node.args.map((a) => transformNode(a, fn));
+    if (newArgs.some((a, i) => a !== node.args[i])) {
+      transformed = new FunctionNode(node.fn, newArgs);
+    }
+  } else if (node instanceof ParenthesisNode) {
+    const newContent = transformNode(node.content, fn);
+    if (newContent !== node.content) {
+      transformed = new ParenthesisNode(newContent);
+    }
+  }
+
+  // Then apply the transformation function to the (possibly updated) node
+  return fn(transformed);
+}
+
+/**
+ * Rewrite an Expr by applying a list of tree-level pattern rules.
+ * Returns a new Expr if any rule matched, or the original Expr if not.
+ */
+export function rewriteExpr(e: Expr, rules: Array<{ patternStr: string; replacementStr: string }>): Expr {
+  let currentNode = e.getNode();
+  let changed = false;
+  let iterations = 0;
+  const MAX_ITERATIONS = 100;
+
+  while (iterations < MAX_ITERATIONS) {
+    let anyMatch = false;
+
+    for (const rule of rules) {
+      try {
+        const patternNode = parse(preprocessMath(rule.patternStr));
+        const replacementNode = parse(preprocessMath(rule.replacementStr));
+
+        // Try matching at every sub-tree position
+        const result = rewriteAtAnyPosition(currentNode, patternNode, replacementNode);
+        if (result !== null) {
+          currentNode = result;
+          anyMatch = true;
+          changed = true;
+        }
+      } catch {
+        // Pattern or replacement didn't parse — skip this rule
+      }
+    }
+
+    if (!anyMatch) break;
+    iterations++;
+  }
+
+  if (changed) {
+    return new Expr(currentNode, `rewrite(${e.inputForm()})`);
+  }
+  return e;
+}
+
+/**
+ * Try to rewrite a pattern at any position in the tree (top-down, left-to-right).
+ * Returns the rewritten tree if a match was found, or null.
+ */
+function rewriteAtAnyPosition(
+  node: MathNode,
+  pattern: MathNode,
+  replacement: MathNode
+): MathNode | null {
+  // Try matching at this position
+  const { matched, bindings } = matchTree(pattern, node);
+  if (matched) {
+    return applyBindings(replacement, bindings);
+  }
+
+  // Recurse into children
+  if (node instanceof OperatorNode) {
+    for (let i = 0; i < node.args.length; i++) {
+      const result = rewriteAtAnyPosition(node.args[i], pattern, replacement);
+      if (result !== null) {
+        const newArgs = [...node.args];
+        newArgs[i] = result;
+        return new OperatorNode(node.op, node.fn, newArgs as [MathNode, MathNode]);
+      }
+    }
+  } else if (node instanceof FunctionNode) {
+    for (let i = 0; i < node.args.length; i++) {
+      const result = rewriteAtAnyPosition(node.args[i], pattern, replacement);
+      if (result !== null) {
+        const newArgs = [...node.args];
+        newArgs[i] = result;
+        return new FunctionNode(node.fn, newArgs);
+      }
+    }
+  } else if (node instanceof ParenthesisNode) {
+    const result = rewriteAtAnyPosition(node.content, pattern, replacement);
+    if (result !== null) {
+      return new ParenthesisNode(result);
+    }
+  }
+
+  return null;
+}
+
 
 /** Simplify an expression */
 export function simplifyExpr(e: Expr): Expr {

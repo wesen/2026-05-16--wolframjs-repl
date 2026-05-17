@@ -1,6 +1,6 @@
 import { dataset, csv, json } from "@dataset";
 import { autoViz, manipulate, slider, watch } from "@viz";
-import { expr, factor, simplify, diff, evaluate, expand, solve } from "@symbolic";
+import { expr, factor, simplify, diff, evaluate, expand, solve, rewriteExpr } from "@symbolic";
 import { rule, rewrite } from "@pattern";
 import { quantity } from "@quantity";
 
@@ -28,6 +28,7 @@ export function createREPLGlobals(): Record<string, unknown> {
     // Pattern matching
     rule,
     rewrite,
+    rewriteExpr,
 
     // Quantities
     quantity,
