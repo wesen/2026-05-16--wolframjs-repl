@@ -1,14 +1,16 @@
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { addCell, setActiveCell, evaluateCode } from "../store/notebookSlice";
 import { addEntry } from "../store/historySlice";
 import { Cell } from "./Cell";
+import { HistoryPanel } from "./HistoryPanel";
 import type { WorkerResponse } from "@eval";
 
 export function Notebook() {
   const dispatch = useAppDispatch();
   const cells = useAppSelector((s) => s.notebook.cells);
   const activeCellId = useAppSelector((s) => s.notebook.activeCellId);
+  const [showHistory, setShowHistory] = useState(false);
 
   // Auto-create the first cell on mount (guard against StrictMode double-fire)
   const initializedRef = useRef(false);
@@ -51,6 +53,12 @@ export function Notebook() {
         e.preventDefault();
         dispatch(addCell());
       }
+
+      // Ctrl/Cmd + H: toggle history panel
+      if ((e.ctrlKey || e.metaKey) && e.key === "h") {
+        e.preventDefault();
+        setShowHistory((prev) => !prev);
+      }
     };
 
     window.addEventListener("keydown", handler);
@@ -64,12 +72,26 @@ export function Notebook() {
   return (
     <div className="notebook max-w-[960px] mx-auto py-8 px-4">
       <header className="mb-8 text-center">
-        <h1 className="text-xl font-sans font-light tracking-wide text-repl-fg">
-          WolframJS REPL
-        </h1>
-        <p className="text-xs text-repl-muted mt-1">
-          A JavaScript REPL with rich object representation — Shift+Enter to evaluate
-        </p>
+        <div className="flex items-center justify-between">
+          <div className="flex-1" />
+          <div className="text-center">
+            <h1 className="text-xl font-sans font-light tracking-wide text-repl-fg">
+              WolframJS REPL
+            </h1>
+            <p className="text-xs text-repl-muted mt-1">
+              A JavaScript REPL with rich object representation — Shift+Enter to evaluate
+            </p>
+          </div>
+          <div className="flex-1 flex justify-end">
+            <button
+              onClick={() => setShowHistory(true)}
+              className="text-xs text-repl-muted hover:text-repl-accent transition-colors px-2 py-1 rounded-md hover:bg-repl-border/30"
+              title="History panel (Ctrl+H)"
+            >
+              📋 History
+            </button>
+          </div>
+        </div>
       </header>
       <div className="cell-list flex flex-col gap-1">
         {cells.map((cell) => (
@@ -95,9 +117,14 @@ export function Notebook() {
             <kbd className="px-1 py-0.5 rounded bg-repl-border/50 text-repl-fg font-mono text-[10px]">Ctrl+Enter</kbd> evaluate active
             &nbsp;&nbsp;
             <kbd className="px-1 py-0.5 rounded bg-repl-border/50 text-repl-fg font-mono text-[10px]">Ctrl+Shift+N</kbd> new cell
+            &nbsp;&nbsp;
+            <kbd className="px-1 py-0.5 rounded bg-repl-border/50 text-repl-fg font-mono text-[10px]">Ctrl+H</kbd> history
           </div>
         </div>
       </footer>
+
+      {/* History panel sidebar */}
+      {showHistory && <HistoryPanel onClose={() => setShowHistory(false)} />}
     </div>
   );
 }

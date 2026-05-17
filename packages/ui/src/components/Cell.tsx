@@ -56,6 +56,7 @@ export function Cell({ cell }: CellComponentProps) {
 
   return (
     <div
+      data-input-index={cell.inputIndex}
       className={`cell group rounded-lg transition-colors ${
         isActive ? "bg-repl-cell-bg shadow-sm" : "hover:bg-repl-cell-bg/50"
       } px-4 py-3`}
