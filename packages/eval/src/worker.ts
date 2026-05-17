@@ -63,24 +63,48 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
 };
 
 function evaluateCode(code: string): unknown {
-  const lines = code.trimEnd().split("\n");
-  const lastLine = lines[lines.length - 1];
-  const bodyLines = lines.slice(0, -1);
+  const trimmed = code.trim();
+  if (!trimmed) return undefined;
 
-  const statementKeywords = /^(const|let|var|function|class|if|for|while|switch|try|throw|return|import|export|break|continue)\b/;
-  const isLastLineExpression = !statementKeywords.test(lastLine.trim()) && lastLine.trim().length > 0;
+  // First try the whole cell as a single expression. This is what makes
+  // multiline expression chains work, for example:
+  // dataset([
+  //   { name: "Alice" },
+  // ]).filterEq("name", "Alice")
+  try {
+    const expressionFn = new Function(...globalNames, `"use strict";\nreturn (${trimmed});`);
+    return expressionFn(...globalValues);
+  } catch (exprErr) {
+    // If the whole-cell expression parse/evaluation failed, fall back to the
+    // notebook convention: run all preceding lines as statements and return
+    // the final expression line. This supports:
+    // const x = 40
+    // x + 2
+    const lines = code.trimEnd().split("\n");
+    const lastLine = lines[lines.length - 1];
+    const bodyLines = lines.slice(0, -1);
 
-  let wrappedCode: string;
-  if (isLastLineExpression && bodyLines.length > 0) {
-    wrappedCode = `"use strict";\n${bodyLines.join("\n")}\nreturn ${lastLine};`;
-  } else if (isLastLineExpression && bodyLines.length === 0) {
-    wrappedCode = `"use strict";\nreturn (${code});`;
-  } else {
-    wrappedCode = `"use strict";\n${code}`;
+    const statementKeywords = /^(const|let|var|function|class|if|for|while|switch|try|throw|return|import|export|break|continue)\b/;
+    const isLastLineExpression = !statementKeywords.test(lastLine.trim()) && lastLine.trim().length > 0;
+
+    let wrappedCode: string;
+    if (isLastLineExpression && bodyLines.length > 0) {
+      wrappedCode = `"use strict";\n${bodyLines.join("\n")}\nreturn ${lastLine};`;
+    } else if (isLastLineExpression && bodyLines.length === 0) {
+      wrappedCode = `"use strict";\nreturn (${code});`;
+    } else {
+      wrappedCode = `"use strict";\n${code}`;
+    }
+
+    try {
+      const fn = new Function(...globalNames, wrappedCode);
+      return fn(...globalValues);
+    } catch {
+      // Preserve the original whole-expression error when the fallback also
+      // fails; it is usually the more relevant message for multiline chains.
+      throw exprErr;
+    }
   }
-
-  const fn = new Function(...globalNames, wrappedCode);
-  return fn(...globalValues);
 }
 
 // ── RichValue wrapping ───────────────────────────────
