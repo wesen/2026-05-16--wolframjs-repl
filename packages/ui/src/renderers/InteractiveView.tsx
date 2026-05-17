@@ -152,7 +152,7 @@ export function InteractiveView({ data }: { data: unknown }) {
       </div>
 
       {/* Rendered result */}
-      <div className="rendered-output text-sm text-repl-fg font-mono p-2 bg-white rounded border border-repl-border/50">
+      <div className="rendered-output text-sm text-repl-fg font-mono p-2 bg-repl-bg rounded border border-repl-border/50">
         {renderedText}
       </div>
     </div>
