@@ -1,18 +1,15 @@
 /**
- * Worker protocol types — shared between main thread and worker.
- * These define the message format for postMessage communication.
+ * Worker protocol types — self-contained (no alias imports) for the worker.
+ * These must match the types in worker-protocol.ts.
  */
-
 export type WorkerRequest =
   | { type: "evaluate"; id: string; code: string }
   | { type: "cancel"; id: string };
 
 export type WorkerResponse =
-  | { type: "result"; id: string; value: import("@core").SerializedRichValue }
-  | { type: "error"; id: string; error: string; stack?: string }
-  | { type: "display"; id: string; value: import("@core").SerializedRichValue };
+  | { type: "result"; id: string; value: any }
+  | { type: "error"; id: string; error: string; stack?: string };
 
-/** Incrementing ID for correlating requests and responses. */
 let nextId = 0;
 export function nextEvalId(): string {
   return `eval-${++nextId}`;

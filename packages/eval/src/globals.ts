@@ -1,5 +1,5 @@
 import { dataset, csv, json } from "@dataset";
-import { autoViz } from "@viz";
+import { autoViz, manipulate, slider, watch } from "@viz";
 import { expr, factor, simplify, diff, evaluate, expand, solve } from "@symbolic";
 import { rule, rewrite } from "@pattern";
 import { quantity } from "@quantity";
@@ -31,5 +31,10 @@ export function createREPLGlobals(): Record<string, unknown> {
 
     // Quantities
     quantity,
+
+    // Interactive
+    manipulate,
+    slider,
+    watch,
   };
 }
