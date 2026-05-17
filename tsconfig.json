@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "ignoreDeprecations": "6.0",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@core": ["packages/core/src/index.ts"],
+      "@eval": ["packages/eval/src/index.ts"],
+      "@dataset": ["packages/dataset/src/index.ts"],
+      "@viz": ["packages/viz/src/index.ts"],
+      "@symbolic": ["packages/symbolic/src/index.ts"],
+      "@pattern": ["packages/pattern/src/index.ts"],
+      "@quantity": ["packages/quantity/src/index.ts"],
+      "@ui": ["packages/ui/src/index.ts"],
+      "@persistence": ["packages/persistence/src/index.ts"]
+    }
+  },
+  "include": ["packages/*/src", "vite-env.d.ts"],
+  "references": [],
+  "exclude": ["node_modules", "dist"]
+}
