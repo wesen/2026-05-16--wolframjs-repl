@@ -6,13 +6,15 @@ import { oneDark } from "@codemirror/theme-one-dark";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching } from "@codemirror/language";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
-import { useAppSelector } from "../store/hooks";
+import { useAppDispatch, useAppSelector } from "../store/hooks";
+import { updateCellCode } from "../store/notebookSlice";
 
 interface CellInputProps {
   cellId: string;
   code: string;
   inputIndex: number;
   onEvaluate: (code: string) => void;
+  onEvaluateAndNext: (code: string) => void;
   isActive: boolean;
 }
 
@@ -54,13 +56,17 @@ export function CellInput({
   code,
   inputIndex,
   onEvaluate,
+  onEvaluateAndNext,
   isActive,
 }: CellInputProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onEvaluateRef = useRef(onEvaluate);
+  const onEvaluateAndNextRef = useRef(onEvaluateAndNext);
   onEvaluateRef.current = onEvaluate;
+  onEvaluateAndNextRef.current = onEvaluateAndNext;
 
+  const dispatch = useAppDispatch();
   const theme = useAppSelector((s) => s.config.theme);
 
   // Create editor on mount or when cellId changes
@@ -81,10 +87,14 @@ export function CellInput({
         bracketMatching(),
         closeBrackets(),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) {
+            dispatch(updateCellCode({ id: cellId, code: update.state.doc.toString() }));
+          }
+        }),
         keymap.of([
-          ...closeBracketsKeymap,
-          ...defaultKeymap,
-          ...historyKeymap,
+          // Custom REPL shortcuts must come before defaultKeymap, otherwise
+          // CodeMirror's default Enter binding inserts a newline first.
           {
             key: "Shift-Enter",
             run: (view) => {
@@ -94,17 +104,24 @@ export function CellInput({
             },
           },
           {
-            key: "Enter",
+            key: "Mod-Enter",
             run: (view) => {
               const code = view.state.doc.toString();
-              const isSingleLine = !code.includes("\n");
-              if (isSingleLine) {
-                onEvaluateRef.current(code);
-                return true;
-              }
-              return false;
+              onEvaluateAndNextRef.current(code);
+              return true;
             },
           },
+          {
+            key: "Ctrl-Enter",
+            run: (view) => {
+              const code = view.state.doc.toString();
+              onEvaluateAndNextRef.current(code);
+              return true;
+            },
+          },
+          ...closeBracketsKeymap,
+          ...defaultKeymap,
+          ...historyKeymap,
         ]),
         replLightTheme,
         themeCompartment.of(isDark ? oneDark : []),
@@ -123,7 +140,7 @@ export function CellInput({
       view.destroy();
       viewRef.current = null;
     };
-  }, [cellId]); // Only recreate when cell identity changes
+  }, [cellId, dispatch]); // Only recreate when cell identity changes
 
   // Sync external code changes into the editor (e.g. from Redux after evaluateCode)
   useEffect(() => {
@@ -158,6 +175,7 @@ export function CellInput({
       </span>
       <div
         ref={editorRef}
+        data-cell-id={cellId}
         onClick={handleClick}
         className="cell-editor flex-1 min-h-[28px] cursor-text"
       />

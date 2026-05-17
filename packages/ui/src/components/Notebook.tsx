@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from "react";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
-import { addCell, setActiveCell, evaluateCode } from "../store/notebookSlice";
+import { addCell, setActiveCell, evaluateCode, focusNextCell } from "../store/notebookSlice";
 import { addEntry } from "../store/historySlice";
 import { cycleTheme } from "../store/configSlice";
 import { Cell } from "./Cell";
@@ -25,8 +25,12 @@ export function Notebook() {
   // Global keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // Ctrl/Cmd + Enter: evaluate active cell
+      // Ctrl/Cmd + Enter outside CodeMirror: evaluate active cell and move to next cell.
+      // Inside CodeMirror this is handled by CellInput so the editor can stop newline insertion.
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        const target = e.target as HTMLElement | null;
+        if (target?.closest(".cm-editor")) return;
+
         e.preventDefault();
         const activeCell = cells.find((c) => c.id === activeCellId);
         if (activeCell && activeCell.code.trim()) {
@@ -43,7 +47,18 @@ export function Notebook() {
                     resultType: result.value.type,
                   })
                 );
+              } else if (result?.type === "error") {
+                dispatch(
+                  addEntry({
+                    inputIndex: activeCell.inputIndex,
+                    code: activeCell.code,
+                    timestamp: Date.now(),
+                    result: null,
+                    resultType: "error",
+                  })
+                );
               }
+              dispatch(focusNextCell({ currentCellId: activeCell.id }));
             }
           );
         }
@@ -117,12 +132,12 @@ export function Notebook() {
       <footer className="mt-12 text-center text-xs text-repl-muted pb-8">
         <div className="space-y-1">
           <div>
-            <kbd className="px-1 py-0.5 rounded bg-repl-border/50 text-repl-fg font-mono text-[10px]">Shift+Enter</kbd> evaluate
+            <kbd className="px-1 py-0.5 rounded bg-repl-border/50 text-repl-fg font-mono text-[10px]">Enter</kbd> newline
             &nbsp;&nbsp;
-            <kbd className="px-1 py-0.5 rounded bg-repl-border/50 text-repl-fg font-mono text-[10px]">Enter</kbd> evaluate (single line)
+            <kbd className="px-1 py-0.5 rounded bg-repl-border/50 text-repl-fg font-mono text-[10px]">Shift+Enter</kbd> evaluate
           </div>
           <div>
-            <kbd className="px-1 py-0.5 rounded bg-repl-border/50 text-repl-fg font-mono text-[10px]">Ctrl+Enter</kbd> evaluate active
+            <kbd className="px-1 py-0.5 rounded bg-repl-border/50 text-repl-fg font-mono text-[10px]">Ctrl+Enter</kbd> evaluate + next cell
             &nbsp;&nbsp;
             <kbd className="px-1 py-0.5 rounded bg-repl-border/50 text-repl-fg font-mono text-[10px]">Ctrl+Shift+N</kbd> new cell
             &nbsp;&nbsp;

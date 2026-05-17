@@ -132,7 +132,7 @@ function ViewSwitcher({ views, activeIndex, onSelect }: ViewSwitcherProps) {
     <div className="view-switcher flex gap-1 text-xs">
       {views.map((view, i) => (
         <button
-          key={view.viewType}
+          key={`${view.viewType}-${view.label}-${i}`}
           onClick={() => onSelect(i)}
           className={"px-2 py-0.5 rounded transition-colors " + (
             i === activeIndex

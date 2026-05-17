@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import type { Cell as CellType } from "../store/types";
 import { useAppDispatch, useAppSelector } from "../store/hooks";
-import { evaluateCode, setActiveCell } from "../store/notebookSlice";
+import { evaluateCode, focusNextCell, setActiveCell } from "../store/notebookSlice";
 import { addEntry } from "../store/historySlice";
 import { CellInput } from "./CellInput";
 import { CellOutput } from "./CellOutput";
@@ -50,6 +50,40 @@ export function Cell({ cell }: CellComponentProps) {
     [dispatch, cell.id, cell.inputIndex]
   );
 
+  const handleEvaluateAndNext = useCallback(
+    (code: string) => {
+      if (!code.trim()) return;
+      dispatch(evaluateCode({ cellId: cell.id, code })).then(
+        (action: any) => {
+          const result = action.payload as WorkerResponse & { cellId: string };
+          if (result?.type === "result") {
+            dispatch(
+              addEntry({
+                inputIndex: cell.inputIndex,
+                code,
+                timestamp: Date.now(),
+                result: result.value,
+                resultType: result.value.type,
+              })
+            );
+          } else if (result?.type === "error") {
+            dispatch(
+              addEntry({
+                inputIndex: cell.inputIndex,
+                code,
+                timestamp: Date.now(),
+                result: null,
+                resultType: "error",
+              })
+            );
+          }
+          dispatch(focusNextCell({ currentCellId: cell.id }));
+        }
+      );
+    },
+    [dispatch, cell.id, cell.inputIndex]
+  );
+
   const handleClick = useCallback(() => {
     dispatch(setActiveCell(cell.id));
   }, [dispatch, cell.id]);
@@ -69,13 +103,13 @@ export function Cell({ cell }: CellComponentProps) {
             code={cell.code}
             inputIndex={cell.inputIndex}
             onEvaluate={handleEvaluate}
+            onEvaluateAndNext={handleEvaluateAndNext}
             isActive={isActive}
           />
         </div>
         <button
           onClick={(e) => {
             e.stopPropagation();
-            // Get code from the CodeMirror editor
             const cmEditor = document.querySelector(`[data-cell-id="${cell.id}"] .cm-content`) as HTMLElement;
             const code = cmEditor?.textContent ?? cell.code;
             handleEvaluate(code);
